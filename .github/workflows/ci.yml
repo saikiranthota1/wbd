@@ -10,6 +10,17 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
 
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -32,7 +43,16 @@ jobs:
 
     - name: Run backend tests
       working-directory: ./backend
-      run: npm test
+      env:
+        NODE_ENV: test
+        MONGODB_URI: mongodb://localhost:27017/test
+        JWT_SECRET: test-secret
+        GOOGLE_CLIENT_ID: test-client-id
+        GOOGLE_CLIENT_SECRET: test-client-secret
+        EMAIL_USER: test@example.com
+        EMAIL_PASS: test-password
+      run: |
+        npm test -- --detectOpenHandles --forceExit
 
     - name: Run frontend tests
       working-directory: ./frontend
