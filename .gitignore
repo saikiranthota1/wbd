@@ -5,3 +5,4 @@
 /backend/.env
 /frontend/process.env
 /backend/sheetskey.json
+/backend/uploads
