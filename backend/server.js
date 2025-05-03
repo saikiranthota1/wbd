@@ -11,6 +11,11 @@ const messageModel = require('./models/adminmessages');
 const startupModel = require("./models/startupmodel");
 const Messages = require('./models/adminmessages');
 const path = require('path');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpecs = require('./swagger');
+const session = require('express-session');
+const RedisStore = require('connect-redis').default;
+const redisClient = require('./config/redis');
 
 dotenv.config();
 
@@ -18,6 +23,25 @@ app.use(express.json());
 
 // Connect to MongoDB
 mongoose.connect(process.env.URL || "mongodb://127.0.0.1:27017/");
+
+// Configure Redis session store
+const redisStore = new RedisStore({
+    client: redisClient.client,
+    prefix: "session:",
+    ttl: 86400 // 24 hours
+});
+
+// Session configuration with Redis
+app.use(session({
+    store: redisStore,
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 86400000 // 24 hours
+    }
+}));
 
 // Socket.IO setup
 const io = new Server(server, {
@@ -30,6 +54,10 @@ const io = new Server(server, {
 // Middleware
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors());
+
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+
 app.get('/', (req, res) => {res.send("hii")})
 // 404 Not Found Handler
 

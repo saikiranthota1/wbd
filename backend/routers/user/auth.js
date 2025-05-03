@@ -14,6 +14,9 @@ const transporter = nodemailer.createTransport({
         pass: 'zetk dsdm imvx keoa'
     }
 });
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
 async function getUserInfo(accessToken) {
   try {
       const userRes = await axios.get(
@@ -37,7 +40,39 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Registration route
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *               - name
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *       400:
+ *         description: Bad request
+ *       500:
+ *         description: Server error
+ */
 router.post('/register', async (req, res) => {
   const { username, password, email } = req.body;
   console.log(req.body);
@@ -127,7 +162,43 @@ router.post('/kyc', upload.single('profile_pic') ,  async (req, res) => {
   }
 });
 
-// Login route
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *       401:
+ *         description: Invalid credentials
+ *       500:
+ *         description: Server error
+ */
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 

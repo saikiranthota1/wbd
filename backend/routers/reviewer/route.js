@@ -5,12 +5,87 @@ const nodemailer= require('nodemailer')
 const senderemail = "hexart637@gmail.com";
 const EIR = require('../../models/EirSchema')
 const GrantRequests = require('../../models/GrandSchemeSchema')
+const Startup = require('../../models/startupmodel');
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: senderemail,
         pass: 'zetk dsdm imvx keoa'
     }
+});
+
+/**
+ * @swagger
+ * /review/startups:
+ *   get:
+ *     summary: Get startups for review
+ *     tags: [Reviewer]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of startups for review
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                   company_name:
+ *                     type: string
+ *                   status:
+ *                     type: string
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get('/startups', async (req, res) => {
+    // ... existing code ...
+});
+
+/**
+ * @swagger
+ * /review/submit:
+ *   post:
+ *     summary: Submit review for a startup
+ *     tags: [Reviewer]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - startup_id
+ *               - review
+ *               - rating
+ *             properties:
+ *               startup_id:
+ *                 type: string
+ *               review:
+ *                 type: string
+ *               rating:
+ *                 type: number
+ *                 minimum: 1
+ *                 maximum: 5
+ *     responses:
+ *       200:
+ *         description: Review submitted successfully
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.post('/submit', async (req, res) => {
+    // ... existing code ...
 });
 
 router.post('/register', async (req, res) => {

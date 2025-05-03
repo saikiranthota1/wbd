@@ -1,16 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const Advertisement = require('../../models/adrequests');
-const existingads= require('../../models/advertisements')
-const startups = require('../../models/startupmodel')
+const existingads = require('../../models/advertisements');
+const startups = require('../../models/startupmodel');
 const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
+const redisClient = require('../../config/redis');
 
 const auth = new google.auth.GoogleAuth({
   keyFile: './sheetskey.json', // Replace with the path to your JSON key file
   scopes: [
     'https://www.googleapis.com/auth/spreadsheets', // Full access to edit sheets
-  ],});
+  ],
+});
 
 const senderemail = "hexart637@gmail.com";
 const transporter = nodemailer.createTransport({
@@ -20,6 +22,7 @@ const transporter = nodemailer.createTransport({
         pass: 'zetk dsdm imvx keoa'
     }
 });
+
 async function getSheetId(spreadsheetId, sheetName) {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -38,6 +41,7 @@ async function getSheetId(spreadsheetId, sheetName) {
     throw new Error(`Sheet with name "${sheetName}" not found.`);
   }
 }
+
 async function deleteAdFromGoogleSheets(companyLink) {
   try {
     const authClient = await auth.getClient();
@@ -111,6 +115,7 @@ async function sendDeletionEmail(toEmail, adName) {
     console.error('Error sending deletion email:', error);
   }
 }
+
 async function sendAcceptanceEmail(toEmail, adName) {
   try {
     await transporter.sendMail({
@@ -124,6 +129,7 @@ async function sendAcceptanceEmail(toEmail, adName) {
     console.error('Error sending deletion email:', error);
   }
 }
+
 // Function to fetch data from Google Sheets
 async function fetchDataFromGoogleSheets() {
   try {
@@ -163,7 +169,89 @@ const fs = require('fs');
 const path = require('path');
 const adrequests = require('../../models/adrequests');
 
-router.get('/newrequests', async function (req, res) {
+/**
+ * @swagger
+ * /ads:
+ *   get:
+ *     summary: Get all advertisements
+ *     tags: [Advertisement]
+ *     responses:
+ *       200:
+ *         description: List of advertisements
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                   title:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                   image:
+ *                     type: string
+ *       500:
+ *         description: Server error
+ */
+router.get('/', async (req, res) => {
+    try {
+        // Try to get data from Redis cache first
+        const cachedAds = await redisClient.get('all_ads');
+        if (cachedAds) {
+            return res.status(200).json(cachedAds);
+        }
+
+        // If not in cache, fetch from database
+        const ads = await Advertisement.find();
+        
+        // Cache the data for 1 hour
+        await redisClient.set('all_ads', ads, 3600);
+        
+        res.status(200).json(ads);
+    } catch (error) {
+        console.error('Error fetching advertisements:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /ads:
+ *   post:
+ *     summary: Create new advertisement
+ *     tags: [Advertisement]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - description
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               image:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Advertisement created successfully
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.post('/', async (req, res) => {
   try {
     const newRequests = await fetchDataFromGoogleSheets(); // Fetch data from Google Sheets
 
@@ -251,17 +339,50 @@ router.get('/getads',async function(req, res){
   res.json(ads);
 })
 
-router.get('/:id',async function(req, res){
-  const { id } = req.params;
-  try {
-    const ad = await existingads.findById(id);
-    if (!ad) {
-      return res.status(404).json({ message: 'Ad not found' });
+/**
+ * @swagger
+ * /ads/{id}:
+ *   get:
+ *     summary: Get advertisement by ID
+ *     tags: [Advertisement]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Advertisement ID
+ *     responses:
+ *       200:
+ *         description: Advertisement retrieved successfully
+ *       404:
+ *         description: Advertisement not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Try to get data from Redis cache first
+        const cachedAd = await redisClient.get(`ad:${id}`);
+        if (cachedAd) {
+            return res.status(200).json(cachedAd);
+        }
+
+        // If not in cache, fetch from database
+        const ad = await existingads.findById(id);
+        if (!ad) {
+            return res.status(404).json({ message: 'Advertisement not found' });
+        }
+
+        // Cache the data for 1 hour
+        await redisClient.set(`ad:${id}`, ad, 3600);
+        
+        res.status(200).json(ad);
+    } catch (error) {
+        console.error('Error fetching advertisement:', error);
+        res.status(500).json({ message: 'Server error' });
     }
-    res.json(ad);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 });
 
 function gcd(a, b) {
@@ -335,6 +456,7 @@ router.post('/click/:adverCompanyId', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 // Route to get all metrics (all advertisements data)
 router.get('/getmetrics', async (req, res) => {
   try {
@@ -390,42 +512,58 @@ gcdWeight = 1;
   }
 });
 
-// Route to delete an advertisement based on adverCompanyId
-router.delete('/delete/request/:adverCompanyId', async (req, res) => {
-  const { adverCompanyId } = req.params;
-  console.log(adverCompanyId);
-
+/**
+ * @swagger
+ * /ads/{id}:
+ *   delete:
+ *     summary: Delete advertisement
+ *     tags: [Advertisement]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Advertisement ID
+ *     responses:
+ *       200:
+ *         description: Advertisement deleted successfully
+ *       404:
+ *         description: Advertisement not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
   try {
-    // Find the advertisement to get the companyLink and email
-    const adToDelete = await Advertisement.findById(adverCompanyId);
-    if (!adToDelete) {
+    const ad = await existingads.findById(id);
+    if (!ad) {
       return res.status(404).json({ message: 'Advertisement not found' });
     }
-
-    const { companyLink, email, adverCompanyName } = adToDelete;
-
-    // Delete from Google Sheets
-    await deleteAdFromGoogleSheets(companyLink);
-    // Send notification email
-    await sendDeletionEmail(email, adverCompanyName);
-    // Delete from MongoDB
-    await Advertisement.findByIdAndDelete(adverCompanyId);
-    res.status(200).send({ message: 'Advertisement deleted successfully' });
+    await existingads.findByIdAndDelete(id);
+    res.status(200).json({ message: 'Advertisement deleted successfully' });
   } catch (error) {
     console.error('Error deleting advertisement:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-router.delete('/delete/:id' , function (req, res) {
-  existingads.findByIdAndDelete(req.params.id).then( function(err) {
-    if (err){
-    console.log(err);
-    return res.status(200).send(err);  
-  }
-  console.log("deleted ad sucessfully");
-    res.status(200).send('Advertisement deleted successfully');
-  });
-})
+// Clear cache when advertisement data is updated
+router.post('/clear-cache', async (req, res) => {
+    try {
+        await redisClient.delete('all_ads');
+        if (req.body.adId) {
+            await redisClient.delete(`ad:${req.body.adId}`);
+        }
+        res.status(200).json({ message: 'Cache cleared successfully' });
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        res.status(500).json({ message: 'Error clearing cache' });
+    }
+});
 
 module.exports = router;
